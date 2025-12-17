@@ -56,3 +56,63 @@ static void fd_set_nb(int fb){
         die("fcntl error");
     }
 }
+
+const size_t k_max_msg = 32<<20;
+typedef std::vector<uint8_t> Buffer;
+
+static void buf_append(Buffer &buf, const uint8_t *data, size_t len){
+    buf.insert(buf.end(), data, data+len);
+}
+
+static void buf_consume(Buffer &buf, size_t n){
+    buf.erase(buf.begin(), buf.begin()+n);
+}
+
+struct Conn{
+    int fd = -1;
+    bool want_read = false;
+    bool want_write = false;
+    bool want_close = false;
+    Buffer incoming;
+    Buffer outgoing;
+    uint64_t last_active_ms = 0;
+    DList  idle_node;
+
+};
+
+static struct{
+    Hmap db;
+    std::vector<Conn*> fd2conn;
+    DList idle_list;
+    std::vector<HeapItem> heap;
+    Thread_Pool thread_pool;
+
+ } g_data;
+
+ static uint32_t handle_accept(int fd){
+    struct sockaddr_in client_addr = {};
+    socklen_t addrlen = sizeof(client_addr);
+    int confid = accept(fd, (struct sockaddr*)&client_addr, &addrlen);
+    if(confid<0){
+        msg_errno("accept() error");
+        return -1;
+    }
+    uint32_t ip = client_addr.sin_addr.s_addr;
+    fprintf(stderr, "new client from %u.%u.%u.%u.%u\n",
+        ip & 255, (ip >> 8)&255, (ip>>16) & 255, ip>>24,
+        ntohs(client_add.sin_port)
+    );
+    fd_set_nb(connfd);
+    Conn *conn = new conn();
+    conn->fd = connfd;
+    conn->want_read = true;
+    conn->last_active_ms  =   get_monotonic_msec();
+    dlist_insert_before(&g_data.idle_list, &conn->idle_node);
+
+    if(g_data.fd2conn.size()<= (size_t)conn->fd){
+        g_data.fd2conn.resize(conn->fd+1);
+    }
+    assert(!g_data.fd2conn[conn->fd]);
+    g_data.fd2conn[conn->fd] = conn;
+    return 0;
+ }
